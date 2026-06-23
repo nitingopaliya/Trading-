@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMC Advanced Charting Engine Engine (AMD & FVG)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0b0e11;
+            color: #d1d4dc;
+            overflow: hidden;
+        }
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #131722;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2a2e39;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #363c4e;
+        }
+        /* Chart grid overlay */
+        .chart-container {
+            position: relative;
+            background-color: #131722;
+            background-image: 
+                linear-gradient(rgba(42, 46, 57, 0.15) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(42, 46, 57, 0.15) 1px, transparent 1px);
+            background-size: 40px 40px;
+            cursor: crosshair;
+            user-select: none;
+        }
+        .glass-panel {
+            background: rgba(20, 24, 35, 0.85);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(42, 46, 57, 0.6);
+        }
+        .active-tab {
+            background-color: #2a2e39;
+            color: #ffffff;
+            border-color: #2962ff;
+        }
+        /* Toggle Switch Styling */
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #2962ff;
+        }
+        .toggle-checkbox:checked + .toggle-label .toggle-dot {
+            transform: translateX(100%);
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col antialiased">
+
+    <!-- TOP NAVIGATION BAR -->
+    <header class="h-14 bg-[#1c2030] border-b border-[#2a2e39] flex items-center justify-between px-4 z-50">
+        <div class="flex items-center space-x-4">
+            <div class="flex items-center space-x-2">
+                <div class="bg-blue-600 p-1.5 rounded text-white flex items-center justify-center">
+                    <i data-lucide="trending-up" class="w-5 h-5"></i>
+                </div>
+                <span class="font-bold text-white tracking-wider text-sm mono">NEXUS<span class="text-blue-500">.SMC</span></span>
+            </div>
+            <div class="h-6 w-[1px] bg-[#2a2e39]"></div>
+            
+            <!-- Asset Search Dropdown Trigger -->
+            <div class="relative">
+                <button id="assetBtn" class="flex items-center space-x-2 bg-[#2a2e39] hover:bg-[#363c4e] px-3 py-1.5 rounded text-white text-xs font-semibold tracking-wide transition-colors">
+                    <span id="currentAsset">BTC/USDT</span>
+                    <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-gray-400"></i>
+                </button>
+                <!-- Dropdown Menu -->
+                <div id="assetDropdown" class="hidden absolute top-full left-0 mt-1 w-64 bg-[#1c2030] border border-[#363c4e] rounded shadow-2xl z-50 p-2">
+                    <div class="relative mb-2">
+                        <input type="text" id="assetSearchInput" placeholder="Search pairs (e.g. Gold, Bitcoin...)" class="w-full bg-[#131722] border border-[#2a2e39] rounded px-7 py-1 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500">
+                        <i data-lucide="search" class="w-3.5 h-3.5 text-gray-500 absolute left-2 top-2"></i>
+                    </div>
+                    <div class="max-h-60 overflow-y-auto space-y-1 text-xs" id="assetList">
+                        <div class="px-2 py-1 text-gray-500 font-bold tracking-wider text-[10px] uppercase bg-[#131722]/50 rounded">Crypto</div>
+                        <button onclick="selectAsset('BTC/USDT', 'Crypto')" class="w-full text-left px-3 py-1.5 hover:bg-[#2a2e39] rounded text-white flex justify-between"><span>Bitcoin</span><span class="text-gray-400 font-mono">BTC/USDT</span></button>
+                        <button onclick="selectAsset('ETH/USDT', 'Crypto')" class="w-full text-left px-3 py-1.5 hover:bg-[#2a2e39] rounded text-white flex justify-between"><span>Ethereum</span><span class="text-gray-400 font-mono">ETH/USDT</span></button>
+                        
+                        <div class="px-2 py-1 text-gray-500 font-bold tracking-wider text-[10px] uppercase bg-[#131722]/50 rounded mt-2">Forex</div>
+                        <button onclick="selectAsset('EUR/USD', 'Forex')" class="w-full text-left px-3 py-1.5 hover:bg-[#2a2e39] rounded text-white flex justify-between"><span>Euro / US Dollar</span><span class="text-gray-400 font-mono">EUR/USD</span></button>
+                        <button onclick="selectAsset('GBP/USD', 'Forex')" class="w-full text-left px-3 py-1.5 hover:bg-[#2a2e39] rounded text-white flex justify-between"><span>British Pound</span><span class="text-gray-400 font-mono">GBP/USD</span></button>
+                        
+                        <div class="px-2 py-1 text-gray-500 font-bold tracking-wider text-[10px] uppercase bg-[#131722]/50 rounded mt-2">Commodities & Indices</div>
+                        <button onclick="selectAsset('XAU/USD', 'Commodities')" class="w-full text-left px-3 py-1.5 hover:bg-[#2a2e39] rounded text-white flex justify-between"><span>Gold / USD</span><span class="text-yellow-500 font-mono">XAU/USD</span></button>
+                        <button onclick="selectAsset('SPX500', 'Indices')" class="w-full text-left px-3 py-1.5 hover:bg-[#2a2e39] rounded text-white flex justify-between"><span>S&P 500 Index</span><span class="text-gray-400 font-mono">SPX500</span></button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Timeframe Selector -->
+            <div class="flex items-center space-x-1 bg-[#131722] p-1 rounded border border-[#2a2e39] text-xs">
+                <button class="px-2 py-1 rounded text-gray-400 hover:text-white">5m</button>
+                <button class="px-2 py-1 rounded text-white bg-[#2a2e39] font-medium">15m</button>
+                <button class="px-2 py-1 rounded text-gray-400 hover:text-white">1H</button>
+                <button class="px-2 py-1 rounded text-gray-400 hover:text-white">4H</button>
+                <button class="px-2 py-1 rounded text-gray-400 hover:text-white">1D</button>
+            </div>
+        </div>
+
+        <!-- Metric badges for Trend Filter & Global State -->
+        <div class="flex items-center space-x-4 text-xs">
+            <div class="flex items-center space-x-2 bg-[#131722] px-3 py-1.5 rounded border border-[#2a2e39]">
+                <span class="text-gray-400">Trend (EMA 50/200):</span>
+                <span id="trendBadge" class="text-emerald-400 font-bold flex items-center gap-1">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Strong Uptrend
+                </span>
+            </div>
+            <div class="flex items-center space-x-2 bg-[#131722] px-3 py-1.5 rounded border border-[#2a2e39]">
+                <span class="text-gray-400">Market Phase:</span>
+                <span id="phaseBadge" class="text-orange-400 font-bold uppercase tracking-wider">Distribution Phase</span>
+            </div>
+            <div class="h-6 w-[1px] bg-[#2a2e39]"></div>
+            <button id="recalcBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-3 py-1.5 rounded transition-colors flex items-center gap-1" title="Regenerate high-probability setup blocks">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh Signals
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN BODY: WORKSPACE AND OVERLAYS -->
+    <div class="flex-1 flex overflow-hidden relative">
+
+        <!-- SIDEBAR CONTROLS (LEFT) -->
+        <aside class="w-64 bg-[#1c2030] border-r border-[#2a2e39] flex flex-col justify-between z-40">
+            <div class="p-4 space-y-5 overflow-y-auto max-h-[calc(100vh-100px)]">
+                <div>
+                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <i data-lucide="layers" class="w-3.5 h-3.5 text-blue-400"></i> Engine Layer Overlays
+                    </h3>
+                    <div class="space-y-3">
+                        <!-- AMD Toggle -->
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs text-white font-medium flex flex-col">
+                                <span>AMD Zones</span>
+                                <span class="text-[10px] text-gray-500 font-normal">Accum/Manip/Distrib</span>
+                            </span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="toggleAMD" checked class="sr-only toggle-checkbox">
+                                <div class="w-8 h-4 bg-gray-700 rounded-full toggle-label transition-colors duration-200">
+                                    <div class="w-3.5 h-3.5 bg-white rounded-full toggle-dot transform transition-transform duration-200 mt-[1px] ml-[1px]"></div>
+                                </div>
+                            </label>
+                        </div>
+                        <!-- FVG Toggle -->
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs text-white font-medium flex flex-col">
+                                <span>Fair Value Gaps (FVG)</span>
+                                <span class="text-[10px] text-gray-500 font-normal">Active structural gaps</span>
+                            </span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="toggleFVG" checked class="sr-only toggle-checkbox">
+                                <div class="w-8 h-4 bg-gray-700 rounded-full toggle-label transition-colors duration-200">
+                                    <div class="w-3.5 h-3.5 bg-white rounded-full toggle-dot transform transition-transform duration-200 mt-[1px] ml-[1px]"></div>
+                                </div>
+                            </label>
+                        </div>
+                        <!-- Market Structure Toggle -->
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs text-white font-medium flex flex-col">
+                                <span>Market Structure</span>
+                                <span class="text-[10px] text-gray-500 font-normal">HH, HL, LH, LL, BOS, CHOCH</span>
+                            </span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="toggleStructure" checked class="sr-only toggle-checkbox">
+                                <div class="w-8 h-4 bg-gray-700 rounded-full toggle-label transition-colors duration-200">
+                                    <div class="w-3.5 h-3.5 bg-white rounded-full toggle-dot transform transition-transform duration-200 mt-[1px] ml-[1px]"></div>
+                                </div>
+                            </label>
+                        </div>
+                        <!-- Liquidity Sweep Toggle -->
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs text-white font-medium flex flex-col">
+                                <span>Liquidity Sweeps</span>
+                                <span class="text-[10px] text-gray-500 font-normal">Equal High/Low, Stop Hunts</span>
+                            </span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="toggleLiquidity" checked class="sr-only toggle-checkbox">
+                                <div class="w-8 h-4 bg-gray-700 rounded-full toggle-label transition-colors duration-200">
+                                    <div class="w-3.5 h-3.5 bg-white rounded-full toggle-dot transform transition-transform duration-200 mt-[1px] ml-[1px]"></div>
+                                </div>
+                            </label>
+                        </div>
+                        <!-- EMAs Toggle -->
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs text-white font-medium flex flex-col">
+                                <span>Trend Lines (EMA)</span>
+                                <span class="text-[10px] text-gray-500 font-normal">EMA 50 & 200 paths</span>
+                            </span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="toggleEMA" checked class="sr-only toggle-checkbox">
+                                <div class="w-8 h-4 bg-gray-700 rounded-full toggle-label transition-colors duration-200">
+                                    <div class="w-3.5 h-3.5 bg-white rounded-full toggle-dot transform transition-transform duration-200 mt-[1px] ml-[1px]"></div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="h-[1px] bg-[#2a2e39]"></div>
+
+                <!-- SIGNAL FIDELITY SELECTION -->
+                <div>
+                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                        <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-400"></i> Signal Quality Lock
+                    </h3>
+                    <p class="text-[11px] text-gray-400 mb-3 leading-relaxed">Prioritizes institutional volume verification over high signal volume.</p>
+                    <div class="bg-[#131722] p-2 rounded border border-[#2a2e39] space-y-1">
+                        <label class="flex items-center space-x-2 text-xs text-white p-1.5 rounded bg-[#2a2e39]/50 border border-blue-500/30 cursor-pointer">
+                            <input type="radio" name="fidelity" checked class="accent-blue-500">
+                            <span class="font-medium">Ultra High Fidelity (Fewer)</span>
+                        </label>
+                        <label class="flex items-center space-x-2 text-xs text-gray-400 p-1.5 rounded opacity-50 cursor-not-allowed">
+                            <input type="radio" name="fidelity" disabled class="accent-blue-500">
+                            <span>Standard Output (Noisy)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- LEGEND -->
+                <div class="bg-[#131722] p-3 rounded border border-[#2a2e39] text-[11px] space-y-2.5">
+                    <div class="font-bold text-gray-400 uppercase tracking-wider text-[10px]">Color Matrix Legend</div>
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-blue-500/20 border border-blue-500"></span><span class="text-gray-300">Accumulation Area</span></div>
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-red-500/20 border border-red-500"></span><span class="text-gray-300">Manipulation Spike</span></div>
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-purple-500/20 border border-purple-500"></span><span class="text-gray-300">Distribution Area</span></div>
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-emerald-500/15 border border-emerald-500/40"></span><span class="text-gray-300">Bullish FVG Zone</span></div>
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-rose-500/15 border border-rose-500/40"></span><span class="text-gray-300">Bearish FVG Zone</span></div>
+                </div>
+            </div>
+
+            <!-- FOOTER INFO -->
+            <div class="p-3 bg-[#131722] border-t border-[#2a2e39] text-[10px] text-gray-500 flex justify-between font-mono">
+                <span>SYSTEM: STABLE</span>
+                <span>DATA: REAL-TIME</span>
+            </div>
+        </aside>
+
+        <!-- FULL SCREEN CHART VIEWPORT CONTAINER -->
+        <main class="flex-1 flex flex-col relative overflow-hidden bg-[#131722]">
+            
+            <!-- OVERLAY FLOATING STATS PANEL -->
+            <div class="absolute top-4 left-4 z-30 flex items-center space-x-2 pointer-events-none">
+                <div class="glass-panel px-3 py-2 rounded text-xs flex flex-col">
+                    <span class="text-gray-400 font-mono text-[10px]">H-VOL PACKETS</span>
+                    <span class="text-white font-bold tracking-wide mono" id="volSpikeStatus">4,812 BTC / min</span>
+                </div>
+                <div class="glass-panel px-3 py-2 rounded text-xs flex flex-col">
+                    <span class="text-gray-400 font-mono text-[10px]">ACTIVE FVGs</span>
+                    <span class="text-emerald-400 font-bold tracking-wide mono" id="activeFvgCount">2 Confirmed</span>
+                </div>
+                <div class="glass-panel px-3 py-2 rounded text-xs flex flex-col">
+                    <span class="text-gray-400 font-mono text-[10px]">LAST LIQ SWEEP</span>
+                    <span class="text-amber-400 font-bold tracking-wide mono" id="liqSweepStatus">EQH Swept [Bearish]</span>
+                </div>
+            </div>
+
+            <!-- INSTRUCTION FLOATING WATERMARK -->
+            <div class="absolute bottom-20 right-6 z-20 pointer-events-none text-right select-none opacity-25">
+                <div class="text-xl font-bold tracking-widest text-gray-500 font-mono uppercase">NEXUS TRACKER v2.4</div>
+                <div class="text-[11px] text-gray-400">Drag to Pan Canvas • Use Scroll Wheel to Zoom X-Axis</div>
+            </div>
+
+            <!-- PRIMARY CANVAS FOR RENDERING SMART MONEY ELEMENTS -->
+            <div id="chartContainer" class="chart-container w-full flex-1 overflow-hidden relative">
+                <canvas id="mainCanvas" class="absolute top-0 left-0 w-full h-full"></canvas>
+            </div>
+
+            <!-- SEPARATE SYNCHRONIZED VOLUME AREA (BOTTOM BAR) -->
+            <div class="h-24 bg-[#131722] border-t border-[#2a2e39] relative flex items-end overflow-hidden">
+                <canvas id="volumeCanvas" class="absolute bottom-0 left-0 w-full h-full"></canvas>
+                <div class="absolute top-1 left-2 pointer-events-none text-[10px] text-gray-500 font-mono uppercase tracking-wider">Institutional Volume Engine / Delta Spikes</div>
+            </div>
+        </main>
+    </div>
+
+    <!-- SCRIPT INFRASTRUCTURE AND LOGICAL MODEL GENERATION -->
+    <script>
+        // Initialize lucide icons
+        lucide.createIcons();
+
+        // Canvas Setup
+        const container = document.getElementById('chartContainer');
+        const mainCanvas = document.getElementById('mainCanvas');
+        const volumeCanvas = document.getElementById('volumeCanvas');
+        const ctx = mainCanvas.getContext('2d');
+        const volCtx = volumeCanvas.getContext('2d');
+
+        // Layout Parameters
+        let width = container.clientWidth;
+        let height = container.clientHeight;
+        
+        // Interactive state variables (Zoom / Scroll)
+        let zoomX = 1.0;
+        let offsetX = 0;
+        let isDragging = false;
+        let startX = 0;
+
+        // Reactive asset and logical configurations
+        let activeAsset = "BTC/USDT";
+        let activeMarketType = "Crypto";
+
+        // Global engine configuration values
+        let config = {
+            drawAMD: true,
+            drawFVG: true,
+            drawStructure: true,
+            drawLiquidity: true,
+            drawEMA: true
+        };
+
+        // Complete structural mock data model mimicking live algorithmic feeds
+        let dataset = [];
+
+        function generateSMCData() {
+            dataset = [];
+            let currentPrice = activeAsset === "BTC/USDT" ? 64200 : activeAsset === "EUR/USD" ? 1.0850 : activeAsset === "XAU/USD" ? 2340 : 5200;
+            let tickSize = currentPrice * 0.0004;
+            
+            // Build 120 candles with intentional algorithmic structure (Accumulation -> Manipulation -> Distribution)
+            for (let i = 0; i < 125; i++) {
+                let open, high, low, close, type, vol;
+                let phase = "Normal";
+                let smcLabel = null;
+                let bosLabel = null;
+                let liqSweep = null;
+
+                // 1. Accumulation block (Index 10 to 45) - tight sideways consolidation
+                if (i >= 10 && i < 45) {
+                    phase = "Accumulation";
+                    open = currentPrice + (Math.sin(i * 0.8) * tickSize * 0.5);
+                    close = currentPrice + (Math.cos(i * 0.8) * tickSize * 0.5);
+                    high = Math.max(open, close) + (Math.random() * tickSize * 0.3);
+                    low = Math.min(open, close) - (Math.random() * tickSize * 0.3);
+                    vol = 300 + Math.floor(Math.random() * 400); // Institutional quiet accumulation
+                } 
+                // 2. Manipulation block (Index 45 to 55) - massive unexpected stop hunt downward
+                else if (i >= 45 && i < 55) {
+                    phase = "Manipulation";
+                    open = currentPrice;
+                    // Violent expansion low to sweep all previous accumulation lows
+                    close = currentPrice - (tickSize * 3.5) + (Math.random() * tickSize);
+                    low = close - (tickSize * 1.5);
+                    high = open + (tickSize * 0.5);
+                    vol = 1800 + Math.floor(Math.random() * 1200); // Extreme institutional sweep volume
+                    if (i === 50) {
+                        liqSweep = "STOP HUNT / LIQ SWEEP (EQL)";
+                    }
+                } 
+                // 3. Strong Break of Structure and Expansion upward into Distribution (Index 55 to 90)
+                else if (i >= 55 && i < 90) {
+                    phase = "Expansion";
+                    open = currentPrice;
+                    close = currentPrice + (tickSize * 2.2);
+                    high = close + (Math.random() * tickSize * 0.4);
+                    low = open - (Math.random() * tickSize * 0.4);
+                    vol = 1200 + Math.floor(Math.random() * 800);
+                    if (i === 58) bosLabel = "CHOCH";
+                    if (i === 70) bosLabel = "BOS";
+                }
+                // 4. Distribution Block (Index 90 to 120) - High altitude sideways turnover range
+                else {
+                    phase = "Distribution";
+                    open = currentPrice + (Math.sin(i * 0.9) * tickSize * 0.4);
+                    close = currentPrice + (Math.cos(i * 0.9) * tickSize * 0.4);
+                    high = Math.max(open, close) + (Math.random() * tickSize * 0.3);
+                    low = Math.min(open, close) - (Math.random() * tickSize * 0.3);
+                    vol = 400 + Math.floor(Math.random() * 500);
+                    if (i === 110) liqSweep = "EQH LIQUIDITY SWEPT";
+                }
+
+                // Smooth out consecutive values
+                currentPrice = close;
+
+                // Add structural market highs/lows at inflection points
+                if (i === 25) smcLabel = "HL";
+                if (i === 40) smcLabel = "LH";
+                if (i === 50) smcLabel = "LL"; // Absolute structural bottom of manipulation
+                if (i === 65) smcLabel = "HH";
+                if (i === 80) smcLabel = "HL";
+                if (i === 105) smcLabel = "HH";
+
+                dataset.push({ open, high, low, close, vol, phase, smcLabel, bosLabel, liqSweep });
+            }
+
+            // Inject high fidelity Fair Value Gaps (FVG) verified by high participation volume candles
+            // Bullish FVG left behind during the rapid manipulation rebound/expansion phase
+            dataset[57].fvg = { type: 'bullish', top: dataset[58].low, bottom: dataset[56].high, strength: 'Strong' };
+            dataset[64].fvg = { type: 'bullish', top: dataset[65].low, bottom: dataset[63].high, strength: 'Medium' };
+            
+            // Bearish FVG left in a minor secondary correction near upper distribution boundaries
+            dataset[98].fvg = { type: 'bearish', top: dataset[97].low, bottom: dataset[99].high, strength: 'Strong' };
+        }
+
+        // Handle Responsive Canvas Scaling
+        function resizeCanvas() {
+            width = container.clientWidth;
+            height = container.clientHeight;
+            
+            mainCanvas.width = width * window.devicePixelRatio;
+            mainCanvas.height = height * window.devicePixelRatio;
+            mainCanvas.style.width = width + 'px';
+            mainCanvas.style.height = height + 'px';
+            
+            volumeCanvas.width = width * window.devicePixelRatio;
+            volumeCanvas.height = volumeCanvas.clientHeight * window.devicePixelRatio;
+            volumeCanvas.style.width = width + 'px';
+            volumeCanvas.style.height = volumeCanvas.clientHeight + 'px';
+
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            volCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            
+            renderChart();
+        }
+
+        // Main Core Rendering Engine Mapping Data Points To Geometric Space
+        function renderChart() {
+            if (dataset.length === 0) return;
+            
+            // Clear screens
+            ctx.clearRect(0, 0, width, height);
+            volCtx.clearRect(0, 0, width, volumeCanvas.clientHeight);
+
+            // Compute range min/max prices dynamically for standard fit inside workspace
+            let prices = dataset.map(d => [d.high, d.low]).flat();
+            let minPrice = Math.min(...prices);
+            let maxPrice = Math.max(...prices);
+            let priceRange = maxPrice - minPrice;
+            
+            // Add padding factors inside workspace bounds
+            minPrice -= priceRange * 0.15;
+            maxPrice += priceRange * 0.15;
+            priceRange = maxPrice - minPrice;
+
+            // Compute Horizontal scale with Zoom multiplier adjustments
+            const candleCount = dataset.length;
+            const baseCandleWidth = width / candleCount;
+            const candleWidth = baseCandleWidth * zoomX;
+            
+            // Function to map index to X pixel
+            function getX(index) {
+                return index * candleWidth + offsetX;
+            }
+
+            // Function to map price to Y pixel
+            function getY(price) {
+                return height - ((price - minPrice) / priceRange) * height;
+            }
+
+            // 1. RENDER AMD (ACCUMULATION, MANIPULATION, DISTRIBUTION) AREAS
+            if (config.drawAMD) {
+                // Accumulation Area Rect
+                let accStart = getX(10);
+                let accEnd = getX(45);
+                ctx.fillStyle = 'rgba(41, 98, 255, 0.06)';
+                ctx.fillRect(accStart, 0, accEnd - accStart, height);
+                // Line border & text label
+                ctx.strokeStyle = 'rgba(41, 98, 255, 0.3)';
+                ctx.setLineDash([4, 4]);
+                ctx.beginPath(); ctx.moveTo(accStart, 0); ctx.lineTo(accStart, height); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(accEnd, 0); ctx.lineTo(accEnd, height); ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.fillStyle = '#2962ff';
+                ctx.font = 'bold 10px Inter';
+                ctx.fillText('ACCUMULATION ZONE', accStart + 10, 25);
+
+                // Manipulation Shock Block
+                let manStart = getX(45);
+                let manEnd = getX(55);
+                ctx.fillStyle = 'rgba(239, 68, 68, 0.08)';
+                ctx.fillRect(manStart, 0, manEnd - manStart, height);
+                ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)';
+                ctx.setLineDash([2, 2]);
+                ctx.beginPath(); ctx.moveTo(manStart, 0); ctx.lineTo(manStart, height); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(manEnd, 0); ctx.lineTo(manEnd, height); ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.fillStyle = '#ef4444';
+                ctx.fillText('MANIPULATION PHASE (STOP HUNT)', manStart + 10, 40);
+
+                // Distribution Ceiling Zone
+                let distStart = getX(90);
+                let distEnd = getX(124);
+                ctx.fillStyle = 'rgba(168, 85, 247, 0.06)';
+                ctx.fillRect(distStart, 0, distEnd - distStart, height);
+                ctx.strokeStyle = 'rgba(168, 85, 247, 0.3)';
+                ctx.fillStyle = '#a855f7';
+                ctx.fillText('DISTRIBUTION RANGE', distStart + 10, 25);
+            }
+
+            // 2. RENDER VERIFIED HIGH PARTICIPATION FAIR VALUE GAPS (FVG)
+            if (config.drawFVG) {
+                dataset.forEach((data, idx) => {
+                    if (data.fvg) {
+                        let xStart = getX(idx);
+                        // Project active zones deep across remaining spatial horizontal vector path
+                        let xEnd = getX(idx + 35); 
+                        let yTop = getY(data.fvg.top);
+                        let yBottom = getY(data.fvg.bottom);
+                        let rectH = yBottom - yTop;
+
+                        if (data.fvg.type === 'bullish') {
+                            ctx.fillStyle = 'rgba(16, 185, 129, 0.12)';
+                            ctx.fillRect(xStart, yTop, xEnd - xStart, rectH);
+                            ctx.strokeStyle = 'rgba(16, 185, 129, 0.3)';
+                            ctx.strokeRect(xStart, yTop, xEnd - xStart, rectH);
+                            ctx.fillStyle = '#10b981';
+                            ctx.font = '9px JetBrains Mono';
+                            ctx.fillText(`+FVG (${data.fvg.strength})`, xStart + 5, yTop + 12);
+                        } else {
+                            ctx.fillStyle = 'rgba(244, 63, 94, 0.12)';
+                            ctx.fillRect(xStart, yTop, xEnd - xStart, rectH);
+                            ctx.strokeStyle = 'rgba(244, 63, 94, 0.3)';
+                            ctx.strokeRect(xStart, yTop, xEnd - xStart, rectH);
+                            ctx.fillStyle = '#f43f5e';
+                            ctx.font = '9px JetBrains Mono';
+                            ctx.fillText(`-FVG (${data.fvg.strength})`, xStart + 5, yTop + 12);
+                        }
+                    }
+                });
+            }
+
+            // 3. RENDER EXPONENTIAL MOVING AVERAGES (EMA TREND FILTERS)
+            if (config.drawEMA) {
+                // Calculate and draw mock institutional EMA lines matching high trend state
+                // EMA 50 (Fast Tracking Support Line)
+                ctx.strokeStyle = '#3b82f6';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                dataset.forEach((d, i) => {
+                    let priceOffset = d.phase === "Accumulation" ? minPrice + priceRange*0.4 : d.phase === "Manipulation" ? minPrice + priceRange*0.25 : minPrice + priceRange*0.6;
+                    let x = getX(i);
+                    let y = getY(priceOffset);
+                    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                });
+                ctx.stroke();
+
+                // EMA 200 (Macro Anchor Trend Line)
+                ctx.strokeStyle = '#f59e0b';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                dataset.forEach((d, i) => {
+                    let baseLine = minPrice + priceRange * 0.32;
+                    let x = getX(i);
+                    let y = getY(baseLine);
+                    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                });
+                ctx.stroke();
+            }
+
+            // 4. MAIN CANDLESTICK GRAPHICS & LABELS LAYER
+            dataset.forEach((d, i) => {
+                let x = getX(i);
+                let yOpen = getY(d.open);
+                let yClose = getY(d.close);
+                let yHigh = getY(d.high);
+                let yLow = getY(d.low);
+                
+                let isBullish = d.close >= d.open;
+                let cColor = isBullish ? '#26a69a' : '#ef5350';
+                
+                // Draw wick lines
+                ctx.strokeStyle = cColor;
+                ctx.lineWidth = 1.2;
+                ctx.beginPath();
+                ctx.moveTo(x, yHigh);
+                ctx.lineTo(x, yLow);
+                ctx.stroke();
+
+                // Draw body blocks
+                ctx.fillStyle = cColor;
+                let bW = candleWidth * 0.72;
+                ctx.fillRect(x - bW/2, Math.min(yOpen, yClose), bW, Math.max(0.5, Math.abs(yOpen - yClose)));
+
+                // Structural Inflection Overlays (HH, HL, LH, LL)
+                if (config.drawStructure && d.smcLabel) {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = 'bold 9px JetBrains Mono';
+                    ctx.textAlign = 'center';
+                    let textY = isBullish ? yHigh - 12 : yLow + 16;
+                    
+                    // Enclose structural nodes inside clear dark pill badges
+                    ctx.fillStyle = '#1c2030';
+                    ctx.fillRect(x - 10, textY - 9, 20, 12);
+                    ctx.strokeStyle = '#4b5563';
+                    ctx.strokeRect(x - 10, textY - 9, 20, 12);
+                    
+                    ctx.fillStyle = d.smcLabel.includes('H') ? '#34d399' : '#f87171';
+                    ctx.fillText(d.smcLabel, x, textY);
+                    ctx.textAlign = 'left'; // Reset alignment
+                }
+
+                // Break of Structure (BOS / CHOCH) horizontal projection lines
+                if (config.drawStructure && d.bosLabel) {
+                    ctx.strokeStyle = '#f59e0b';
+                    ctx.lineWidth = 1;
+                    ctx.setLineDash([2, 2]);
+                    ctx.beginPath();
+                    ctx.moveTo(x - candleWidth*2, yClose);
+                    ctx.lineTo(x + candleWidth*4, yClose);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    
+                    ctx.fillStyle = '#f59e0b';
+                    ctx.font = '9px Inter';
+                    ctx.fillText(d.bosLabel, x + 5, yClose - 4);
+                }
+
+                // Liquidity sweep markers (Equal Highs / Equal Lows swept)
+                if (config.drawLiquidity && d.liqSweep) {
+                    ctx.strokeStyle = '#f59e0b';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.moveTo(x - candleWidth*3, yLow);
+                    ctx.lineTo(x + candleWidth*2, yLow);
+                    ctx.stroke();
+
+                    // Liquidity indicator arrow
+                    ctx.fillStyle = '#f59e0b';
+                    ctx.font = 'bold 9px Inter';
+                    ctx.fillText(`⚡ ${d.liqSweep}`, x - 20, yLow + 25);
+                }
+
+                // 5. SYNCHRONIZED VOLUME BARS SCALING
+                let maxVol = Math.max(...dataset.map(d => d.vol));
+                let volH = (d.vol / maxVol) * (volumeCanvas.clientHeight * 0.75);
+                volCtx.fillStyle = d.vol > 1500 ? 'rgba(239, 68, 68, 0.7)' : isBullish ? 'rgba(38, 166, 154, 0.4)' : 'rgba(239, 83, 80, 0.4)';
+                volCtx.fillRect(x - bW/2, volumeCanvas.clientHeight - volH, bW, volH);
+                
+                // If high volume spike, draw an asterisk notation anchor on the bar
+                if (d.vol > 1500) {
+                    volCtx.fillStyle = '#ffffff';
+                    volCtx.font = 'bold 10px Inter';
+                    volCtx.fillText("INST", x - 10, volumeCanvas.clientHeight - volH - 4);
+                }
+            });
+        }
+
+        // EVENT DRIVERS: ZOOM, DRAG PANNING AND UI ACTIONS
+        container.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startX = e.clientX - offsetX;
+        });
+
+        window.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        container.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            offsetX = e.clientX - startX;
+            renderChart();
+        });
+
+        // X-Axis zoom via standard mouse wheel integration without altering manual view tracking
+        container.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomFactor = 1.1;
+            if (e.deltaY < 0) {
+                zoomX = Math.min(zoomX * zoomFactor, 6.0); // Caps scale max
+            } else {
+                zoomX = Math.max(zoomX / zoomFactor, 0.4); // Caps scale min
+            }
+            renderChart();
+        }, { passive: false });
+
+        // Sidebar Control Layer Updates
+        document.getElementById('toggleAMD').addEventListener('change', (e) => { config.drawAMD = e.target.checked; renderChart(); });
+        document.getElementById('toggleFVG').addEventListener('change', (e) => { config.drawFVG = e.target.checked; renderChart(); });
+        document.getElementById('toggleStructure').addEventListener('change', (e) => { config.drawStructure = e.target.checked; renderChart(); });
+        document.getElementById('toggleLiquidity').addEventListener('change', (e) => { config.drawLiquidity = e.target.checked; renderChart(); });
+        document.getElementById('toggleEMA').addEventListener('change', (e) => { config.drawEMA = e.target.checked; renderChart(); });
+
+        // Search Dropdown Visibility handlers
+        const assetBtn = document.getElementById('assetBtn');
+        const assetDropdown = document.getElementById('assetDropdown');
+        
+        assetBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            assetDropdown.classList.toggle('hidden');
+        });
+
+        document.addEventListener('click', () => {
+            assetDropdown.classList.add('hidden');
+        });
+
+        assetDropdown.addEventListener('click', (e) => {
+            e.stopPropagation(); // Avoid instant closing on interior clicks
+        });
+
+        // Dynamic Filtering within Asset Box
+        document.getElementById('assetSearchInput').addEventListener('input', (e) => {
+            let filter = e.target.value.toLowerCase();
+            let buttons = document.querySelectorAll('#assetList button');
+            buttons.forEach(btn => {
+                let text = btn.textContent.toLowerCase();
+                if(text.includes(filter)) btn.style.display = 'flex'; else btn.style.display = 'none';
+            });
+        });
+
+        // Asset Swapping Core Functionality
+        function selectAsset(symbol, type) {
+            activeAsset = symbol;
+            activeMarketType = type;
+            document.getElementById('currentAsset').textContent = symbol;
+            assetDropdown.classList.add('hidden');
+            
+            // Adjust metadata UI tags accordingly 
+            const trendBadge = document.getElementById('trendBadge');
+            const phaseBadge = document.getElementById('phaseBadge');
+            const volSpikeStatus = document.getElementById('volSpikeStatus');
+            const liqSweepStatus = document.getElementById('liqSweepStatus');
+
+            if(type === 'Forex') {
+                trendBadge.className = "text-rose-400 font-bold flex items-center gap-1";
+                trendBadge.innerHTML = "<span class='w-2 h-2 rounded-full bg-rose-400'></span> Sideways / Consolidation";
+                phaseBadge.textContent = "Accumulation Block";
+                volSpikeStatus.textContent = "1.2B Standard Delta";
+                liqSweepStatus.textContent = "EQL Swept [Bullish Reversal]";
+            } else if(type === 'Commodities') {
+                trendBadge.className = "text-emerald-400 font-bold flex items-center gap-1";
+                trendBadge.innerHTML = "<span class='w-2 h-2 rounded-full bg-emerald-400 animate-pulse'></span> Strong Uptrend";
+                phaseBadge.textContent = "Expansion Phase";
+                volSpikeStatus.textContent = "9.4K Ounces / min";
+                liqSweepStatus.textContent = "Minor Liquidity Sweep";
+            } else {
+                trendBadge.className = "text-emerald-400 font-bold flex items-center gap-1";
+                trendBadge.innerHTML = "<span class='w-2 h-2 rounded-full bg-emerald-400 animate-pulse'></span> Strong Uptrend";
+                phaseBadge.textContent = "Distribution Phase";
+                volSpikeStatus.textContent = "4,812 BTC / min";
+                liqSweepStatus.textContent = "EQH Swept [Bearish]";
+            }
+
+            // Regenerate algorithmic dataset and repaint viewports
+            generateSMCData();
+            renderChart();
+        }
+
+        // Manual Refresh Button Action Hook
+        document.getElementById('recalcBtn').addEventListener('click', () => {
+            generateSMCData();
+            renderChart();
+        });
+
+        // Initialize Engine Systems on Boot
+        generateSMCData();
+        window.addEventListener('resize', resizeCanvas);
+        // Initial delayed frame buffer sizing to ensure layouts populate matching exact bounds
+        setTimeout(resizeCanvas, 150);
+
+    </script>
+</body>
+</html>
